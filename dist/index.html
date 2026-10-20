@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111c2b" />
+    <meta name="theme-color" content="#101720" />
     <title>系篮球队战术库</title>
     <meta
       name="description"
@@ -20,7 +20,12 @@
           <h1>系篮球队战术库</h1>
         </div>
       </div>
-      <div class="topbar-note">5v5 · 进攻战术</div>
+      <div class="header-actions">
+        <div class="language-switch" role="group" aria-label="语言切换">
+          <button type="button" data-language="zh" aria-pressed="true" lang="zh-CN">中文</button>
+          <button type="button" data-language="en" aria-pressed="false" lang="en">EN</button>
+        </div>
+      </div>
     </header>
 
     <main class="app-shell">
@@ -30,20 +35,9 @@
             <p class="eyebrow">OFFENSE</p>
             <h2>进攻战术</h2>
           </div>
-          <span id="play-count" class="count-pill">0 / 6</span>
+          <span id="play-count" class="library-count">3 套</span>
         </div>
         <nav id="play-list" class="play-list"></nav>
-        <div class="legend-card">
-          <h3>图例</h3>
-          <div class="legend-grid">
-            <span><i class="line run"></i>跑位</span>
-            <span><i class="line pass"></i>传球</span>
-            <span><i class="line screen"></i>掩护</span>
-            <span><i class="dot offense"></i>进攻</span>
-            <span><i class="dot defense"></i>防守</span>
-            <span><i class="line chase"></i>追防</span>
-          </div>
-        </div>
       </aside>
 
       <section class="workspace">
@@ -51,24 +45,16 @@
           <div>
             <p id="play-family" class="eyebrow">战术 2 · 左侧发起</p>
             <h2 id="play-title">左2</h2>
-            <p id="play-summary" class="play-summary">等待录入战术说明</p>
+            <details class="play-overview">
+              <summary>查看配合说明</summary>
+              <p id="play-summary" class="play-summary">等待录入战术说明</p>
+            </details>
           </div>
-          <div class="header-badges">
-            <span id="side-badge" class="badge">左侧</span>
-            <span id="status-badge" class="badge muted">待录入</span>
-          </div>
+          <p class="study-caption">看站位，读配合。<span>点击要点中的号码定位球员</span></p>
         </div>
 
         <div class="content-grid">
           <div class="board-panel">
-            <section id="decision-panel" class="decision-panel" hidden aria-label="战术分支选择">
-              <div class="decision-heading">
-                <span class="eyebrow">选择掩护方向</span>
-                <span id="decision-stage" class="decision-stage">第3步分支</span>
-              </div>
-              <div id="decision-options" class="decision-options" role="group" aria-label="掩护方向"></div>
-              <p id="decision-note" class="decision-note" aria-live="polite"></p>
-            </section>
             <div class="board-toolbar">
               <div class="step-readout">
                 <span>步骤</span>
@@ -86,15 +72,27 @@
               </div>
             </div>
 
+            <div class="court-roster" aria-label="定位进攻球员">
+              <span id="focus-readout" aria-live="polite">定位球员</span>
+              <div class="roster-options">
+                <button type="button" class="roster-player" data-locate-player="1" aria-label="定位1号球员" aria-pressed="false">1</button>
+                <button type="button" class="roster-player" data-locate-player="2" aria-label="定位2号球员" aria-pressed="false">2</button>
+                <button type="button" class="roster-player" data-locate-player="3" aria-label="定位3号球员" aria-pressed="false">3</button>
+                <button type="button" class="roster-player" data-locate-player="4" aria-label="定位4号球员" aria-pressed="false">4</button>
+                <button type="button" class="roster-player" data-locate-player="5" aria-label="定位5号球员" aria-pressed="false">5</button>
+              </div>
+              <button id="clear-focus" class="clear-focus" type="button" hidden>取消定位</button>
+            </div>
+
             <div id="court-wrap" class="court-wrap">
               <svg id="court" viewBox="0 0 960 900" role="img" aria-label="按FIBA比例绘制的篮球半场战术动画">
                 <title>15米宽、14米长的标准篮球半场</title>
                 <desc>篮筐在上方底线一侧；三分线半径6.75米，罚球半圆半径1.80米。</desc>
                 <defs>
                   <pattern id="wood" width="64" height="64" patternUnits="userSpaceOnUse">
-                    <rect width="64" height="64" fill="#d6a46b"></rect>
-                    <path d="M0 0V64M32 0V64M64 0V64" stroke="#e1b781" stroke-width="1"></path>
-                    <path d="M0 16H64M0 48H64" stroke="#ca955c" stroke-width="0.7" opacity="0.55"></path>
+                    <rect width="64" height="64" fill="#ba9b77"></rect>
+                    <path d="M0 0V64M32 0V64M64 0V64" stroke="#d4bb9a" stroke-width="0.8" opacity="0.25"></path>
+                    <path d="M0 16H64M0 48H64" stroke="#967956" stroke-width="0.6" opacity="0.14"></path>
                   </pattern>
                   <marker id="arrow-run" markerUnits="userSpaceOnUse" markerWidth="18" markerHeight="18" viewBox="0 0 9 9" refX="7" refY="4.5" orient="auto">
                     <path d="M0 0L9 4.5L0 9Z" fill="#fff3cf"></path>
@@ -125,29 +123,58 @@
               </div>
             </div>
 
+            <div class="court-legend" aria-label="球场图例">
+              <span><i class="dot offense"></i>进攻</span>
+              <span><i class="dot defense"></i>防守</span>
+              <span><i class="line run"></i>跑位</span>
+              <span><i class="line pass"></i>传球</span>
+              <span><i class="line screen"></i>掩护</span>
+              <span><i class="line chase"></i>追防</span>
+            </div>
+            <div class="playback-dock">
+            <div class="transport" aria-label="动画播放控制">
+              <button id="reset-btn" class="icon-btn" type="button" title="回到开始" aria-label="回到开始">↺</button>
+              <button id="prev-btn" class="icon-btn" type="button" title="上一步" aria-label="上一步">‹</button>
+              <button id="play-btn" class="play-btn" type="button">▶ <span>播放</span></button>
+              <button id="next-btn" class="icon-btn" type="button" title="下一步" aria-label="下一步">›</button>
+            </div>
             <div class="step-progress">
               <div class="progress-heading">
                 <label for="step-progress">本步进度</label>
                 <output id="step-time" for="step-progress">0.0 / 0.0 秒</output>
               </div>
               <input id="step-progress" type="range" min="0" max="1000" value="0" step="1" aria-label="拖动查看本步动作时序" />
-              <p id="phase-note" class="phase-note" aria-live="polite">拖动进度，观察掩护、补防与顺下的时机。</p>
             </div>
-            <div class="transport" aria-label="动画播放控制">
-              <button id="reset-btn" class="icon-btn" type="button" title="回到开始">↺</button>
-              <button id="prev-btn" class="icon-btn" type="button" title="上一步">‹</button>
-              <button id="play-btn" class="play-btn" type="button">▶ <span>播放</span></button>
-              <button id="next-btn" class="icon-btn" type="button" title="下一步">›</button>
             </div>
           </div>
 
           <aside class="detail-panel">
-            <section>
-              <p class="eyebrow">CURRENT STEP</p>
+            <section id="decision-panel" class="decision-panel" hidden aria-label="战术分支选择">
+              <div class="decision-heading">
+                <span class="eyebrow">选择后续配合</span>
+                <span id="decision-stage" class="decision-stage"></span>
+              </div>
+              <div id="decision-options" class="decision-options" role="group" aria-label="战术分支"></div>
+              <p id="decision-note" class="decision-note" aria-live="polite"></p>
+            </section>
+            <div class="study-tabs" role="tablist" aria-label="学习内容">
+              <button id="coaching-tab" type="button" role="tab" aria-selected="true" aria-controls="coaching-view" tabindex="0">执行要点</button>
+              <button id="steps-tab" type="button" role="tab" aria-selected="false" aria-controls="steps-view" tabindex="-1">分步动作</button>
+            </div>
+            <section id="coaching-view" class="coaching-card" role="tabpanel" aria-labelledby="coaching-tab">
+              <p class="reading-hint">点击文中号码，对照球场站位；再次点击取消。</p>
+              <ul id="coaching-points">
+                <li>录入战术后显示关键站位、时机与选择。</li>
+              </ul>
+            </section>
+            <div id="steps-view" role="tabpanel" aria-labelledby="steps-tab" hidden>
+            <section class="current-step">
+              <p class="eyebrow">当前动作</p>
               <h3 id="step-title">尚未录入</h3>
               <p id="step-description" class="step-description">
                 选中战术后，可在这里查看每一步的动作、目的和阅读顺序。
               </p>
+              <p id="phase-note" class="phase-note" aria-live="polite">拖动进度，观察掩护、补防与顺下的时机。</p>
             </section>
 
             <section class="timeline-section">
@@ -158,13 +185,7 @@
               <ol id="timeline" class="timeline"></ol>
             </section>
 
-            <section class="coaching-card">
-              <p class="eyebrow">COACHING POINTS</p>
-              <h3>执行要点</h3>
-              <ul id="coaching-points">
-                <li>录入战术后显示关键站位、时机与选择。</li>
-              </ul>
-            </section>
+            </div>
           </aside>
         </div>
       </section>
@@ -174,8 +195,11 @@
     <script src="./plays.js"></script>
     <script src="./plays-left4.js"></script>
     <script src="./plays-left2-routes.js"></script>
+    <script src="./plays-right3.js"></script>
     <script src="./plays-variants.js"></script>
     <script src="./motion.js"></script>
+    <script src="./i18n-en.js"></script>
+    <script src="./i18n.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

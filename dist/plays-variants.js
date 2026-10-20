@@ -1,4 +1,4 @@
-// Screen metadata and right-side plays are derived from the authored left plays.
+// Screen metadata and opposite-side plays are derived from one authored version.
 (() => {
   const plays = window.PLAYBOOK_DATA;
   const axisSum = 2 * COURT.padding + COURT.dimensions.width * COURT.scale;
@@ -24,14 +24,16 @@
     if (typeof value !== "string") return value;
     if (key === "d") return mirrorPath(value);
     if ((key === "id" || key === "defaultOption") && ["left", "right"].includes(value)) return value === "left" ? "right" : "left";
-    if (key === "id" && /^left-\d+$/.test(value)) return value.replace("left-", "right-");
+    if (key === "id" && /^(left|right)-\d+$/.test(value)) return value.startsWith('left-')
+      ? value.replace("left-", "right-") : value.replace("right-", "left-");
     return swapText(value);
   }
-  for (const id of ["left-2", "left-4"]) {
+  for (const id of ["left-2", "right-3", "left-4"]) {
     const play = plays.find(p => p.id === id);
     const steps = [...play.steps, ...(play.decisions || []).flatMap(d => d.options.flatMap(o => Object.values(o.stepOverrides || {})))];
     steps.forEach(step => (step.paths || []).forEach(path => {
       if (path.type !== "screen") return;
+      if (path.screenActor) return;
       if (id === "left-2") {
         const baseline = path.d.includes(String(COURT.point(1.95, 0).x));
         path.screenActor = "4";
@@ -42,15 +44,15 @@
         path.screenNormal = path.screenActor === "4" ? { x: .76, y: .65 } : { x: 1, y: 0 };
       }
     }));
-    const right = mirror(play);
-    right.mirroredFrom = play.id;
+    const opposite = mirror(play);
+    opposite.mirroredFrom = play.id;
     // Ball offsets are vectors, including the implicit default in the motion engine.
     const fixOffsets = steps => Object.values(steps).forEach(step => {
       if (step.ballOwner && !step.ballOffset) step.ballOffset = { x: 27, y: 0 };
     });
-    fixOffsets(right.steps);
-    (right.decisions || []).forEach(d => d.options.forEach(o => fixOffsets(o.stepOverrides || {})));
-    const index = plays.findIndex(p => p.id === right.id);
-    if (index >= 0) plays[index] = right;
+    fixOffsets(opposite.steps);
+    (opposite.decisions || []).forEach(d => d.options.forEach(o => fixOffsets(o.stepOverrides || {})));
+    const index = plays.findIndex(p => p.id === opposite.id);
+    if (index >= 0) plays[index] = opposite;
   }
 })();

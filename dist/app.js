@@ -1,16 +1,19 @@
 (() => {
-  const plays = window.PLAYBOOK_DATA || [];
+  const i18n = window.PlaybookI18n;
+  const t = i18n.t;
+  let plays = i18n.getPlays();
   const $ = (selector) => document.querySelector(selector);
   const state = {
     playIndex: 0, stepIndex: 0, active: null, playing: false, running: false,
     frameId: null, lastTimestamp: null, pieceNodes: new Map(), ballNode: null,
     pathNodes: [], cueNodes: new Map(), choices: {}, confirmed: new Set(),
-    pendingDecision: null, resolvedPlay: null, openFamilies: new Set()
+    pendingDecision: null, resolvedPlay: null, openFamilies: new Set(),
+    focusedPlayer: null, studyTab: 'coaching'
   };
   const els = {
     playList: $("#play-list"), playCount: $("#play-count"), playTitle: $("#play-title"),
-    playFamily: $("#play-family"), playSummary: $("#play-summary"), sideBadge: $("#side-badge"),
-    statusBadge: $("#status-badge"), stepReadout: $("#step-readout"), stepTitle: $("#step-title"),
+    playFamily: $("#play-family"), playSummary: $("#play-summary"),
+    stepReadout: $("#step-readout"), stepTitle: $("#step-title"),
     stepDescription: $("#step-description"), timeline: $("#timeline"), duration: $("#duration"),
     coachingPoints: $("#coaching-points"), emptyBoard: $("#empty-board"),
     offenseLayer: $("#offense-layer"), defenseLayer: $("#defense-layer"), pathsLayer: $("#paths-layer"),
@@ -20,7 +23,9 @@
     resetBtn: $("#reset-btn"), speed: $("#speed"), progress: $("#step-progress"),
     stepTime: $("#step-time"), phaseNote: $("#phase-note"),
     decisionPanel: $("#decision-panel"), decisionOptions: $("#decision-options"),
-    decisionNote: $("#decision-note"), decisionStage: $("#decision-stage")
+    decisionNote: $("#decision-note"), decisionStage: $("#decision-stage"),
+    detailPanel: $(".detail-panel"), studyTabs: $(".study-tabs"),
+    focusReadout: $("#focus-readout"), clearFocus: $("#clear-focus")
   };
   const currentPlay = () => state.resolvedPlay || plays[state.playIndex];
   const currentIndex = () => state.active?.index ?? state.stepIndex;
@@ -32,7 +37,7 @@
   }
 
   function updatePlayButton() {
-    els.playBtn.innerHTML = state.running ? "Ⅱ <span>暂停</span>" : "▶ <span>播放</span>";
+    els.playBtn.innerHTML = `${state.running ? 'Ⅱ' : '▶'} <span>${t(state.running ? 'pause' : 'play')}</span>`;
   }
 
   function pausePlayback() {
@@ -58,71 +63,67 @@
       const active = members.some(item => item.index === state.playIndex);
       const group = document.createElement("details");
       group.className = `play-group${active ? " active-family" : ""}`;
-      group.open = state.openFamilies.has(family);
+      group.open = state.openFamilies.has(number);
       const heading = document.createElement("summary");
-      const ready = members.filter(item => item.play.status === "ready").length;
-      heading.innerHTML = `<span class="play-number">${number}</span><strong>${number}号战术</strong><span class="family-status">${ready ? `${ready}/2` : "待录入"}</span>`;
+      heading.innerHTML = `<span class="play-number">${number}</span><strong>${t('family',{number})}</strong><span class="family-chevron" aria-hidden="true"></span>`;
       group.appendChild(heading);
       const children = document.createElement("div");
       children.className = "play-children";
       children.setAttribute("role", "group");
-      children.setAttribute("aria-label", `${number}号战术的左右侧版本`);
+      children.setAttribute("aria-label", t('familySides',{number}));
       members.forEach(({ play, index }) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = `play-item${index === state.playIndex ? " active" : ""}`;
         button.dataset.playId = play.id;
         button.setAttribute("aria-current", index === state.playIndex ? "page" : "false");
-        button.innerHTML = `
-          <span class="play-side-icon">${play.side[0]}</span>
-          <span><strong>${play.name}</strong><small>${play.side}发起</small></span>
-          <i class="status-dot ${play.status === "ready" ? "ready" : ""}"></i>`;
+        button.innerHTML = `<strong>${play.name}</strong>`;
         button.addEventListener("click", () => selectPlay(index));
         children.appendChild(button);
       });
       group.appendChild(children);
       group.addEventListener("toggle", () => {
-        if (group.open) state.openFamilies.add(family);
-        else state.openFamilies.delete(family);
+        if (group.open) state.openFamilies.add(number);
+        else state.openFamilies.delete(number);
       });
       els.playList.appendChild(group);
     });
-    els.playCount.textContent = `${families.filter(f => plays.some(p => p.family === f && p.status === "ready")).length} / ${families.length}`;
-    els.playCount.title = "已录入的战术组数";
+    els.playCount.textContent = t('count',{count:families.length});
+    els.playCount.title = t('countTitle');
   }
 
   function selectPlay(index) {
     stopPlayback();
     state.playIndex = index;
-    state.openFamilies.add(plays[index].family);
+    state.openFamilies.add(plays[index].name.replace(/[^0-9]/g,''));
     state.stepIndex = 0;
     state.choices = {};
     state.confirmed.clear();
     state.pendingDecision = null;
+    state.focusedPlayer = null;
+    els.detailPanel.scrollTop = 0;
     state.resolvedPlay = window.PlayMotion.resolvePlay(plays[index], state.choices);
     const play = currentPlay();
     history.replaceState(null, "", `#${encodeURIComponent(play.id)}`);
     renderPlayList();
     els.playTitle.textContent = play.name;
-    els.playFamily.textContent = `${play.family} · ${play.side}发起`;
+    els.playFamily.textContent = t('playFamily',{family:play.family,side:play.side});
     els.playSummary.textContent = play.summary;
-    els.sideBadge.textContent = play.side;
-    els.statusBadge.textContent = play.status === "ready" ? "已完成" : "待录入";
-    els.statusBadge.classList.toggle("muted", play.status !== "ready");
     els.emptyBoard.classList.toggle("hidden", play.steps.length > 0);
     els.duration.textContent = play.duration || "—";
     renderCoachingPoints();
+    selectStudyTab(state.studyTab);
     renderDecision();
     clearCourt();
     if (!play.steps.length) {
       els.stepReadout.textContent = "0 / 0";
-      els.stepTitle.textContent = "尚未录入";
-      els.stepDescription.textContent = "文字描述确认后生成动画步骤。";
-      els.timeline.innerHTML = '<li class="timeline-empty">文字描述确认后生成动画步骤</li>';
+      els.stepTitle.textContent = t('emptyStep');
+      els.stepDescription.textContent = t('emptyDescription');
+      els.timeline.innerHTML = `<li class="timeline-empty">${t('emptyTimeline')}</li>`;
       [els.prevBtn, els.nextBtn, els.resetBtn, els.playBtn, els.progress].forEach((node) => node.disabled = true);
       els.progress.value = "0";
-      els.stepTime.textContent = "0.0 / 0.0 秒";
-      els.phaseNote.textContent = "等待录入战术。";
+      els.stepTime.textContent = t('time',{elapsed:'0.0',duration:'0.0'});
+      els.phaseNote.textContent = t('emptyNote');
       return;
     }
     buildCourt(play);
@@ -133,29 +134,114 @@
   function renderCoachingPoints() {
     els.coachingPoints.replaceChildren();
     const points = currentPlay().coachingPoints.length
-      ? currentPlay().coachingPoints : ["录入战术后显示关键站位、时机与选择。"];
+      ? currentPlay().coachingPoints : [t('emptyPoints')];
     points.forEach((point) => {
       const item = document.createElement("li");
-      item.textContent = point;
+      const separator = point.search(/[：:]/);
+      const body = separator >= 0 ? point.slice(separator + 1) : point;
+      if (separator >= 0) {
+        const title = document.createElement('strong');
+        title.className = 'point-title';
+        title.textContent = point.slice(0, separator + 1);
+        item.appendChild(title);
+      }
+      // Preserve the original text while turning player references into locators.
+      const pattern = /X[1-5]|[1-5](?:号)?/g;
+      let previous = 0;
+      for (const match of body.matchAll(pattern)) {
+        item.appendChild(document.createTextNode(body.slice(previous, match.index)));
+        const button = document.createElement('button');
+        const label = match[0].replace('号', '');
+        button.type = 'button';
+        button.className = `player-reference${label.startsWith('X') ? ' defense' : ''}`;
+        button.dataset.locatePlayer = label;
+        button.textContent = match[0];
+        button.setAttribute('aria-label',t(label.startsWith('X') ? 'locateDefense' : 'locate',{label}));
+        item.appendChild(button);
+        previous = match.index + match[0].length;
+      }
+      item.appendChild(document.createTextNode(body.slice(previous)));
       els.coachingPoints.appendChild(item);
     });
+    renderPlayerFocus();
+  }
+
+  function renderPlayerFocus() {
+    state.pieceNodes.forEach((node, label) => {
+      node.classList.toggle('is-highlighted', label === state.focusedPlayer);
+      node.classList.toggle('is-dimmed', !!state.focusedPlayer && label !== state.focusedPlayer);
+    });
+    document.querySelectorAll('[data-locate-player]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.locatePlayer === state.focusedPlayer));
+    });
+    els.focusReadout.textContent = state.focusedPlayer ? t('focused',{label:state.focusedPlayer}) : t('focus');
+    els.clearFocus.hidden = !state.focusedPlayer;
+  }
+
+  function selectStudyTab(name, focus = false) {
+    state.studyTab = name;
+    els.studyTabs.querySelectorAll('[role=tab]').forEach(button => {
+      const active = button.id === `${name}-tab`;
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+      if (active && focus) button.focus();
+    });
+    $('#coaching-view').hidden = name !== 'coaching';
+    $('#steps-view').hidden = name !== 'steps';
+  }
+
+  function changeLanguage(language) {
+    if (language === i18n.language) return;
+    plays = i18n.setLanguage(language);
+    state.resolvedPlay = window.PlayMotion.resolvePlay(plays[state.playIndex], state.choices);
+    const play = currentPlay();
+    els.playTitle.textContent = play.name;
+    els.playFamily.textContent = t('playFamily',{family:play.family,side:play.side});
+    els.playSummary.textContent = play.summary;
+    els.duration.textContent = play.duration || '—';
+    renderPlayList();
+    renderCoachingPoints();
+    // Replace text/graphics in place. Keep time, play state, branch confirmations,
+    // selected tab and player focus, including when paused at a decision.
+    const index = currentIndex(), elapsed = state.active?.elapsed || 0;
+    clearCourt();
+    buildCourt(play);
+    if (play.steps.length) {
+      const motion = window.PlayMotion.compileStep(play,index);
+      state.active = {index,motion,elapsed};
+      drawPaths(play.steps[index],motion);
+      refreshStepDetails(index);
+      renderDecision();
+      renderMotion();
+    }
+    updatePlayButton();
   }
 
   function renderDecision() {
     const decisions = currentPlay().decisions || [];
-    els.decisionPanel.hidden = decisions.length === 0;
-    if (!decisions.length) return;
+    // Reveal only a node that has actually been reached, never a future choice.
+    // Keep the latest reached node available for replay until the next one arrives.
     const decision = decisions.find((item) => item.id === state.pendingDecision)
-      || decisions.find((item) => item.atStep >= currentIndex()) || decisions.at(-1);
+      || decisions.filter((item) => item.atStep <= currentIndex()).at(-1);
+    els.decisionPanel.hidden = !decision;
+    els.decisionPanel.classList.toggle("needs-choice", state.pendingDecision !== null && !!decision);
+    if (!decision) {
+      els.decisionOptions.replaceChildren();
+      els.decisionNote.textContent = "";
+      els.decisionStage.textContent = "";
+      return;
+    }
     const selected = state.choices[decision.id] || decision.defaultOption;
-    els.decisionPanel.classList.toggle("needs-choice", state.pendingDecision !== null);
-    els.decisionStage.textContent = state.pendingDecision ? "已暂停 · 请选择后续动作" : `第${decision.atStep + 1}步分支`;
+    els.decisionPanel.querySelector('.eyebrow').textContent = decision.title || t('screenDirection');
+    els.decisionOptions.setAttribute("aria-label", decision.title || t('screenDirection'));
+    els.decisionStage.textContent = state.pendingDecision ? t('pending') : t('branchStep',{step:decision.atStep+1});
     els.decisionOptions.replaceChildren();
     decision.options.forEach((option) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "decision-option";
       button.dataset.choice = option.id;
+      button.dataset.decision = decision.id;
       button.setAttribute("aria-pressed", String(selected === option.id));
       const title = document.createElement("strong");
       title.textContent = option.label;
@@ -167,8 +253,9 @@
     });
     const activeOption = decision.options.find((option) => option.id === selected);
     els.decisionNote.textContent = state.pendingDecision
-      ? "球已传到2号。选择掩护方向后，播放对应的补防与顺下。"
-      : `${activeOption?.label || ""}。左右沿用球队叫法，以“中路／底线”辨认路线；切换方向会从上提掩护重播。`;
+      ? decision.prompt || t('screenPrompt')
+      : decision.note ? `${activeOption?.label || ""}${i18n.language === 'en' ? '. ' : '。'}${decision.note}`
+        : t('screenNote',{label:activeOption?.label || ''});
   }
 
   function needsDecision(index) {
@@ -182,6 +269,11 @@
     state.stepIndex = Math.max(0, decision.atStep - 1);
     installStep(decision.atStep);
     renderDecision();
+    // Bring the newly reached choice into the reading area, not over the court.
+    els.detailPanel.scrollTop = 0;
+    if (window.matchMedia('(max-width: 700px)').matches) {
+      els.decisionPanel.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   function chooseBranch(decision, option) {
@@ -191,8 +283,11 @@
     state.confirmed.add(decision.id);
     state.pendingDecision = null;
     // Choices at later nodes depend on the chosen earlier route.
-    (currentPlay().decisions || []).forEach((later) => {
-      if (later.atStep > decision.atStep) state.confirmed.delete(later.id);
+    (plays[state.playIndex].decisions || []).forEach((later) => {
+      if (later.atStep > decision.atStep) {
+        state.confirmed.delete(later.id);
+        delete state.choices[later.id];
+      }
     });
     state.resolvedPlay = window.PlayMotion.resolvePlay(plays[state.playIndex], state.choices);
     renderCoachingPoints();
@@ -201,7 +296,7 @@
       installStep(decision.atStep);
       state.playing = true;
       run();
-    }
+    } else refreshStepDetails(currentIndex());
     renderDecision();
   }
 
@@ -221,6 +316,12 @@
       node.className = itemIndex === index ? "active" : "";
       node.textContent = item.title;
       node.addEventListener("click", () => jumpToStep(itemIndex));
+      node.tabIndex = 0;
+      node.setAttribute('role', 'button');
+      node.setAttribute('aria-label',t('stepLabel',{step:itemIndex+1,title:item.title}));
+      node.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); jumpToStep(itemIndex); }
+      });
       els.timeline.appendChild(node);
     });
   }
@@ -241,8 +342,8 @@
       const group = svgEl("g", { class: `player-piece ${player.team || "offense"}`, "data-player": label });
       const title = svgEl("title");
       title.textContent = player.team === "defense"
-        ? (play.defense === "man-to-man" ? `${label}：盯防${label.replace(/^X/, "")}号` : `${label}号防守球员`)
-        : `${label}号进攻球员`;
+        ? (play.defense === "man-to-man" ? t('playerMan',{label,number:label.replace(/^X/,'')}) : t('playerZone',{label}))
+        : t('playerOffense',{label});
       group.setAttribute("aria-label", title.textContent);
       group.append(title, svgEl("circle", { cx: 0, cy: 0, r: 29 }));
       const text = svgEl("text", { x: 0, y: 1 });
@@ -257,6 +358,7 @@
       svgEl("path", { d: "M-11 0H11M0-11V11M-8-8Q0 0 8 8M8-8Q0 0-8 8", fill: "none", stroke: "#432616", "stroke-width": 1.5 })
     );
     els.ballLayer.appendChild(state.ballNode);
+    renderPlayerFocus();
   }
 
   function drawPaths(step, motion) {
@@ -264,7 +366,7 @@
     els.screenLayer.replaceChildren();
     state.pathNodes = (step.paths || []).map((definition) => {
       const node = svgEl("path", {
-        d: motion.pathFor(definition.actor) || definition.d,
+        d: definition.type === 'screen' ? '' : motion.pathFor(definition.actor) || definition.d || '',
         class: `motion-path ${definition.type || "run"}`
       });
       node.dataset.actor = definition.actor || "";
@@ -282,6 +384,7 @@
     state.lastTimestamp = null;
     drawPaths(currentPlay().steps[index], motion);
     refreshStepDetails(index);
+    renderDecision();
     renderMotion();
   }
 
@@ -290,13 +393,14 @@
     state.cueNodes.forEach((node, id) => {
       if (!wanted.has(id)) { node.remove(); state.cueNodes.delete(id); }
     });
+    const placedLabels = [];
     sample.cues.forEach((cue) => {
       const position = sample.positions.get(cue.actor);
       if (!position) return;
       let group = state.cueNodes.get(cue.id);
       if (!group) {
         group = svgEl("g", { class: `court-cue ${cue.tone || "help"}` });
-        const width = Math.max(90, cue.text.length * 20 + 18);
+        const width = Math.max(90, cue.text.length * (i18n.language === 'en' ? 9 : 20) + 18);
         group.dataset.width = String(width);
         group.appendChild(svgEl("rect", { x: -width / 2, y: -15, width, height: 30, rx: 8 }));
         const text = svgEl("text", { x: 0, y: 0 });
@@ -309,7 +413,8 @@
       const width = Number(group.dataset.width);
       const offsets = [
         [cue.dx || 0, cue.dy ?? 54], [0, -54], [0, 54],
-        [-110, -28], [110, -28], [-110, 30], [110, 30]
+        [-110, -28], [110, -28], [-110, 30], [110, 30],
+        [-150, -54], [150, -54], [-150, 54], [150, 54]
       ];
       const candidates = offsets.map(([dx, dy], index) => {
         const x = Math.max(32 + width / 2, Math.min(928 - width / 2, position.x + dx));
@@ -320,13 +425,17 @@
           const nearestY = Math.max(y - 15, Math.min(y + 15, p.y));
           if (Math.hypot(p.x - nearestX, p.y - nearestY) < 34) penalty += 100;
         });
+        placedLabels.forEach((other) => {
+          if (Math.abs(x - other.x) < (width + other.width) / 2 + 8 && Math.abs(y - other.y) < 38) penalty += 80;
+        });
         return { x, y, penalty };
       });
       const placement = candidates.reduce((a, b) => a.penalty <= b.penalty ? a : b);
+      placedLabels.push({ ...placement, width });
       group.setAttribute("transform", `translate(${placement.x} ${placement.y})`);
     });
     const note = sample.cues.map((cue) => cue.note || cue.text).join(" → ")
-      || currentPlay().steps[currentIndex()].phaseNote || "拖动进度，观察每名球员的动作与时机。";
+      || currentPlay().steps[currentIndex()].phaseNote || t('observation');
     if (els.phaseNote.textContent !== note) els.phaseNote.textContent = note;
   }
 
@@ -352,12 +461,13 @@
       node.style.display = sample.progress >= (definition.from ?? 0) && sample.progress <= (definition.to ?? 1) ? "" : "none";
     });
     els.progress.value = active.motion.duration ? String(Math.round(sample.progress * 1000)) : "0";
-    els.stepTime.textContent = `${(active.elapsed / 1000).toFixed(1)} / ${(active.motion.duration / 1000).toFixed(1)} 秒`;
+    els.stepTime.textContent = t('time',{elapsed:(active.elapsed/1000).toFixed(1),duration:(active.motion.duration/1000).toFixed(1)});
     els.court.dataset.step = String(active.index);
     els.court.dataset.elapsed = String(active.elapsed);
     els.court.dataset.branch = JSON.stringify(state.choices);
     renderCues(sample);
-    if (state.pendingDecision) els.phaseNote.textContent = "请在上方选择左挡或右挡，继续对应的后续动作。";
+    if (state.pendingDecision) els.phaseNote.textContent = currentPlay().decisions.find(d => d.id === state.pendingDecision)?.prompt
+      || t('pendingHint');
   }
 
   function tick(timestamp) {
@@ -420,6 +530,25 @@
   }
 
   els.playBtn.addEventListener("click", () => state.running ? pausePlayback() : startPlayback());
+  document.addEventListener('click', event => {
+    const languageButton = event.target.closest('[data-language]');
+    if (languageButton) { changeLanguage(languageButton.dataset.language); return; }
+    const button = event.target.closest('[data-locate-player]');
+    if (!button) return;
+    const label = button.dataset.locatePlayer;
+    state.focusedPlayer = state.focusedPlayer === label ? null : label;
+    renderPlayerFocus();
+  });
+  els.clearFocus.addEventListener('click', () => { state.focusedPlayer = null; renderPlayerFocus(); });
+  els.studyTabs.addEventListener('click', event => {
+    const button = event.target.closest('[role=tab]');
+    if (button) selectStudyTab(button.id.replace('-tab', ''));
+  });
+  els.studyTabs.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    selectStudyTab(event.key === 'Home' ? 'coaching' : event.key === 'End' ? 'steps' : state.studyTab === 'coaching' ? 'steps' : 'coaching', true);
+  });
   els.prevBtn.addEventListener("click", () => jumpToStep(Math.max(0, currentIndex() - 1)));
   els.nextBtn.addEventListener("click", () => jumpToStep(Math.min(currentPlay().steps.length - 1, currentIndex() + 1)));
   els.resetBtn.addEventListener("click", () => {
@@ -441,6 +570,7 @@
     const index = plays.findIndex(play => play.id === id);
     selectPlay(index >= 0 ? index : 0);
   };
+  i18n.applyStatic();
   selectFromHash();
   window.addEventListener("hashchange", selectFromHash);
   if (new URLSearchParams(location.search).get("autoplay") === "1") window.setTimeout(startPlayback, 450);

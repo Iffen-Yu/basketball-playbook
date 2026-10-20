@@ -1,0 +1,4 @@
+.publish-repository.git/
+__pycache__/
+*.py[cod]
+/preview-*.png

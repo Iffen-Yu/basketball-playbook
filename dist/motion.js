@@ -90,7 +90,7 @@
       previous = to;
       return segment;
     });
-    const pace = compileTrack(spec.timing.map(key => ({
+    const pace = compileTrack(spec.timing.filter(key => key.step < starts.length).map(key => ({
       time: starts[key.step] + durations[key.step] * key.t,
       x: key.node === undefined ? key.progress : nodes[key.node] / total, y: 0
     })));
@@ -239,17 +239,24 @@
     const steps = [...base.steps];
     const routes = { ...base.routes };
     let coachingPoints = base.coachingPoints;
+    let endStep = steps.length - 1;
     const selected = [];
+    const decisions = [];
     (base.decisions || []).forEach((decision) => {
+      if (decision.when && !selected.some(({ decision: prior, option }) =>
+        prior.id === decision.when.decision && option.id === decision.when.option)) return;
+      decisions.push(decision);
       const option = decision.options.find((item) => item.id === choices[decision.id])
         || decision.options.find((item) => item.id === decision.defaultOption)
         || decision.options[0];
       selected.push({ decision, option });
       Object.entries(option.stepOverrides || {}).forEach(([index, step]) => { steps[Number(index)] = step; });
       Object.assign(routes, option.routeOverrides || {});
+      if (option.endStep !== undefined) endStep = Math.min(endStep, option.endStep);
       if (option.coachingPoints) coachingPoints = option.coachingPoints;
     });
-    return { ...base, steps, routes, coachingPoints, selected };
+    return { ...base, steps: steps.slice(0, endStep + 1), routes, coachingPoints, selected,
+      decisions: decisions.filter(decision => decision.atStep <= endStep) };
   }
 
   window.PlayMotion = Object.freeze({ compileStep, resolvePlay });
